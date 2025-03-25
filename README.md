@@ -95,26 +95,52 @@ This project is under active development. Contributions are welcome!
 
 ### Building from Source
 
-1. Clone the repository:
+There are two types of installations:
+
+1. **Regular Installation** (for users who just want to use the application):
 ```bash
 git clone https://github.com/rebroad/xfce4-xr-desktop.git
 cd xfce4-xr-desktop
+pip install -r requirements.txt  # Install only the required dependencies
+./install.sh
 ```
 
-2. Install development dependencies:
+2. **Development Installation** (for contributors and developers):
 ```bash
-pip install -r requirements-dev.txt
+git clone https://github.com/rebroad/xfce4-xr-desktop.git
+cd xfce4-xr-desktop
+pip install -r requirements.txt         # Install required dependencies
+pip install -r requirements-dev.txt     # Install development tools
+pip install -e .                        # Install in editable mode
 ```
 
-3. Install in development mode:
-```bash
-pip install -e .
-```
+### Development Tools
+
+The `requirements-dev.txt` file includes tools that are only needed if you plan to contribute to the project:
+
+- `pytest`: For writing and running unit tests
+- `black`: For automatic code formatting to maintain consistent style
+- `flake8`: For code linting to catch potential errors
+- `mypy`: For static type checking
+
+These development tools help maintain code quality but are not needed for regular users who just want to run the application.
 
 ### Running Tests
 
+If you have installed the development dependencies, you can run the tests:
+
 ```bash
 python -m pytest tests/
+```
+
+### Code Style
+
+We use several tools to maintain code quality:
+
+```bash
+black .              # Format code
+mypy .              # Check types
+flake8              # Run linter
 ```
 
 ## License
