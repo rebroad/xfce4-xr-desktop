@@ -1,0 +1,5 @@
+gi>=3.38.0
+numpy>=1.21.0
+pygobject>=3.38.0
+python-xlib>=0.33
+evdev>=1.6.1 
