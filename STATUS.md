@@ -22,7 +22,8 @@
    - Widescreen mode toggle
    - Follow mode toggle
    - Follow threshold slider
-   - Recenter button (UI created, but signal connection missing)
+   - Recenter button (✅ signal connected)
+   - Refresh button (✅ added and connected)
    - Keybindings display section
 
 4. **Installation Script** (`install.sh`)
@@ -33,20 +34,19 @@
 
 ## ❌ Known Issues / TODO
 
-1. **Import Error**: `Xfce` module doesn't exist - imported but never used, can be removed
-2. **Missing Signal Connection**: Recenter button created but not connected to handler
-3. **Missing Refresh Button**: README mentions refresh button but it's not in the UI
+1. ✅ **FIXED**: Import Error - `Xfce` module removed, `gi.require_version()` added
+2. ✅ **FIXED**: Recenter button signal connection added
+3. ✅ **FIXED**: Refresh button added to UI
 4. **Keybindings Not Implemented**: `setup_keybindings()` method is empty (TODO comment)
 5. **XR Driver Not Installed**: The XR driver CLI (`xr_driver_cli`) is not currently installed
-6. **Missing gi.require_version()**: Should specify GTK version before importing
 
 ## 🔧 What Needs to be Done
 
 ### High Priority
-1. Remove unused `Xfce` import
-2. Add `gi.require_version()` calls
-3. Connect recenter button signal
-4. Add refresh button to UI
+1. ✅ **DONE**: Remove unused `Xfce` import
+2. ✅ **DONE**: Add `gi.require_version()` calls
+3. ✅ **DONE**: Connect recenter button signal
+4. ✅ **DONE**: Add refresh button to UI
 
 ### Medium Priority
 5. Implement XFCE4 keybinding integration (for global shortcuts)
@@ -66,9 +66,9 @@
 
 ## 🚀 Next Steps
 
-1. Fix the import issues
-2. Complete the missing UI connections
-3. Install XR driver
-4. Test the application
-5. Implement keybindings
+1. ✅ **DONE**: Fix the import issues
+2. ✅ **DONE**: Complete the missing UI connections
+3. **Install XR driver** - This is the main blocker for testing
+4. **Test the application** - Once XR driver is installed
+5. **Implement keybindings** - XFCE4 global keybinding integration
 
