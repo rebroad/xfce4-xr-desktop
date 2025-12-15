@@ -18,7 +18,7 @@ A virtual desktop extension for XFCE4 that enables XR (Extended Reality) functio
 - GTK3
 - X11
 - Compatible AR glasses (tested with Xreal Air 2 Pro)
-- XR driver (installed via Breezy Desktop or similar)
+- XR driver that provides shared memory interface (must work with XFCE4 - **NOT Breezy Desktop**, which is GNOME/KDE only)
 
 ## Installation
 
@@ -34,9 +34,10 @@ pip install -r requirements.txt
 ```
 
 3. Install the XR driver:
-```bash
-./install_xr_driver.sh
-```
+   - **Important:** Breezy Desktop only works with GNOME/KDE, not XFCE4
+   - You'll need an XR driver that works with XFCE4 and provides the shared memory interface
+   - Check XReal's official Linux driver documentation
+   - The driver must provide `xr_driver_cli` and shared memory files at `/dev/shm/xr_driver_*`
 
 4. Install the XFCE4 XR Desktop application:
 ```bash

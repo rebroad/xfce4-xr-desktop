@@ -60,7 +60,7 @@
 
 ## 📋 Installation Status
 
-- **XR Driver**: Not installed (need to install Breezy Desktop or similar)
+- **XR Driver**: Not installed (need XFCE4-compatible XR driver - **NOT Breezy Desktop**, which is GNOME/KDE only)
 - **Python Dependencies**: Need to verify with `pip install -r requirements.txt`
 - **System Dependencies**: Need to verify `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-xfce4ui-2`
 
