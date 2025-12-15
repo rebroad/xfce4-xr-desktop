@@ -88,8 +88,10 @@ class MainWindow(Gtk.Window):
 
         # Buttons
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        recenter_button = Gtk.Button(label="Recenter Display")
-        button_box.pack_start(recenter_button, True, True, 6)
+        self.recenter_button = Gtk.Button(label="Recenter Display")
+        self.refresh_button = Gtk.Button(label="Refresh")
+        button_box.pack_start(self.recenter_button, True, True, 6)
+        button_box.pack_start(self.refresh_button, True, True, 6)
         controls_box.pack_start(button_box, False, False, 6)
 
         # Keybindings section
@@ -130,6 +132,8 @@ class MainWindow(Gtk.Window):
         self.widescreen_switch.connect('notify::active', self._on_widescreen_toggled)
         self.follow_switch.connect('notify::active', self._on_follow_toggled)
         self.threshold_scale.connect('value-changed', self._on_threshold_changed)
+        self.recenter_button.connect('clicked', self._on_recenter_clicked)
+        self.refresh_button.connect('clicked', self._on_refresh_clicked)
 
     def setup_keybindings(self):
         """Set up global keybindings."""
@@ -170,4 +174,12 @@ class MainWindow(Gtk.Window):
         """Handle follow threshold slider changes."""
         threshold = scale.get_value()
         self.xr_manager.set_follow_threshold(threshold)
-        self.config.follow_threshold = threshold 
+        self.config.follow_threshold = threshold
+
+    def _on_recenter_clicked(self, button):
+        """Handle recenter button click."""
+        self.xr_manager.recenter_display()
+
+    def _on_refresh_clicked(self, button):
+        """Handle refresh button click."""
+        self.xr_manager._check_device_connection()

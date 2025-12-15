@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import sys
 import logging
-from gi.repository import Gtk, Gdk, Xfce
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk
 from core.xr_manager import XRManager
 from ui.main_window import MainWindow
 from utils.config import Config

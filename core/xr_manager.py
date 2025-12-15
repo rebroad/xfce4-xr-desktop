@@ -1,6 +1,8 @@
 import os
 import logging
-from gi.repository import GObject, Gdk, Xfce
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import GObject, Gdk
 
 class XRManager(GObject.Object):
     __gsignals__ = {
