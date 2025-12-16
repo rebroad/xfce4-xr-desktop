@@ -1,7 +1,5 @@
 import os
 import logging
-import gi
-gi.require_version('Gtk', '3.0')
 from gi.repository import GObject, Gdk
 
 class XRManager(GObject.Object):
@@ -58,6 +56,7 @@ class XRManager(GObject.Object):
         try:
             if not os.path.exists(self._state_path):
                 self._device_connected = False
+                self.emit('device-connected', False)
                 return
 
             with open(self._state_path, 'r') as f:
@@ -69,6 +68,7 @@ class XRManager(GObject.Object):
         except Exception as e:
             self.logger.error(f"Error checking device connection: {str(e)}")
             self._device_connected = False
+            self.emit('device-connected', False)
 
     def _write_control(self, key, value):
         """Write a control command to the XR driver."""
