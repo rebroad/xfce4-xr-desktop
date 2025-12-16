@@ -1,0 +1,390 @@
+---
+name: Adapt Breezy Desktop for XFCE4 with 3D Rendering
+overview: Adapt breezy-desktop to support XFCE4 by creating an XFCE4 backend that creates virtual displays and renders them in 3D space using a standalone OpenGL rendering application, since XFCE4 doesn't have compositor APIs for 3D transformations.
+todos:
+  - id: research_3d_rendering
+    content: "Research 3D rendering requirements: study GNOME/KDE shader code, design standalone renderer architecture, choose implementation language (Python vs C/C++)"
+    status: pending
+  - id: create_xfce4_backend_structure
+    content: Create breezy-desktop/xfce4/ directory structure (src/, renderer/, bin/) and backend interface files
+    status: pending
+    dependencies:
+      - research_3d_rendering
+  - id: implement_virtual_display_creation
+    content: Implement virtual display creation for XFCE4 using xrandr (newmode, addmode, etc.)
+    status: pending
+    dependencies:
+      - create_xfce4_backend_structure
+  - id: implement_3d_renderer
+    content: "Implement standalone 3D renderer with multi-threaded architecture: non-blocking X11 screen capture thread, render thread matching glasses refresh rate, thread-safe frame buffer, IMU data reading, GLSL shader porting, OpenGL rendering to AR glasses display"
+    status: pending
+    dependencies:
+      - create_xfce4_backend_structure
+  - id: integrate_with_ui
+    content: Integrate XFCE4 backend with breezy-desktop UI (detection, display management, renderer lifecycle)
+    status: pending
+    dependencies:
+      - implement_virtual_display_creation
+      - implement_3d_renderer
+  - id: update_build_system
+    content: Add XFCE4 backend to build system, create installation scripts, update documentation
+    status: pending
+    dependencies:
+      - integrate_with_ui
+  - id: test_and_validate
+    content: Test virtual display creation, 3D rendering in AR glasses, follow mode, and all XR driver controls
+    status: pending
+    dependencies:
+      - update_build_system
+---
+
+# Adapt Breezy Desktop for XFCE4 with 3D Rendering
+
+## Critical Requirement: 3D Transformations
+
+**The Problem:** Virtual displays MUST be rendered in 3D space in AR glasses. This is not optional - it's the core functionality.
+
+**How It Works on GNOME/KDE:**
+
+- Compositor (Mutter/KWin) creates virtual displays
+- Compositor reads IMU data from `/dev/shm/breezy_desktop_imu` (shared memory)
+- Compositor applies 3D transformations using GLSL shaders
+- Compositor renders displays directly to AR glasses display (which is just a regular monitor)
+- XRLinuxDriver provides IMU data but doesn't do the rendering
+
+**For XFCE4:**
+
+- XFCE4 doesn't have compositor APIs for 3D rendering
+- We need a **standalone 3D rendering application** that:
+
+  1. Captures virtual display content (X11 screen capture)
+  2. Reads IMU data from shared memory
+  3. Applies 3D transformations using OpenGL/GLSL shaders
+  4. Renders transformed content to AR glasses display
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Breezy Desktop UI                         │
+│              (Python GTK4 - already exists)                  │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       │ Creates/manages virtual displays
+                       │
+        ┌──────────────┴──────────────┐
+        │                             │
+        ▼                             ▼
+┌───────────────┐          ┌──────────────────────────────────┐
+│  XFCE4 Backend│          │      3D Renderer App             │
+│  (Python)     │          │  (C/C++ or Python + PyOpenGL)   │
+│               │          │                                  │
+│  - Creates    │          │  ┌────────────────────────────┐ │
+│    virtual    │          │  │  Capture Thread           │ │
+│    displays   │─────────▶│  │  (X11 screen capture)     │ │
+│    via xrandr │          │  │  - Non-blocking           │ │
+│               │          │  │  - May be slower than     │ │
+│               │          │  │    glasses refresh rate    │ │
+│               │          │  └──────────┬───────────────┘ │
+│               │          │             │ Latest frame    │
+│               │          │             ▼                 │
+│               │          │  ┌────────────────────────────┐ │
+│               │          │  │  Render Thread              │ │
+│               │          │  │  (OpenGL rendering)         │ │
+│               │          │  │  - Matches glasses refresh  │ │
+│               │          │  │  - Always renders latest   │ │
+│               │          │  │    captured frame          │ │
+│               │          │  │  - Reads IMU data          │ │
+│               │          │  │  - Applies 3D transforms  │ │
+│               │          │  └──────────┬──────────────────┘ │
+└───────────────┘          └────────────┼──────────────────────┘
+                                      │ Renders to AR glasses
+                                      │ (at glasses refresh rate)
+                                      ▼
+                           ┌──────────────────────┐
+                           │   XRLinuxDriver      │
+                           │  (provides IMU data)  │
+                           └──────────────────────┘
+```
+
+**Critical Performance Requirement:**
+
+- **Frame Rate Synchronization:** Rendering to AR glasses MUST match the glasses' refresh rate (typically 60Hz or 72Hz)
+- **Non-Blocking Capture:** X11 screen capture may be slower than the glasses' refresh rate, so it must run in a separate thread
+- **Latest Frame Rendering:** The render thread always uses the latest captured frame, never blocking on capture
+- **Thread Safety:** Frame buffer must be thread-safe (mutex-protected or lock-free ring buffer)
+
+## Implementation Plan
+
+### Phase 1: Research and Design 3D Rendering Pipeline
+
+**Goal:** Understand the 3D rendering requirements and design the standalone renderer
+
+**Tasks:**
+
+1. Study GNOME/KDE 3D rendering implementation:
+
+   - `breezy-desktop/gnome/src/virtualdisplayeffect.js` - GLSL shader code
+   - `breezy-desktop/gnome/src/math.js` - Math utilities (quaternions, FOV, etc.)
+   - `breezy-desktop/kwin/src/qml/` - KDE's QtQuick3D implementation
+
+2. Design standalone renderer architecture:
+
+   - X11 screen capture method (XShmGetImage, XGetImage, or XComposite)
+   - OpenGL context creation and management
+   - GLSL shader porting from GNOME implementation
+   - IMU data reading from shared memory
+   - Rendering to AR glasses display (X11 output)
+
+3. Choose implementation language:
+
+   - **Option A:** C/C++ with OpenGL (best performance, more complex)
+   - **Option B:** Python with PyOpenGL (easier to integrate, may be slower)
+
+**Files to examine:**
+
+- `breezy-desktop/gnome/src/virtualdisplayeffect.js` - Shader code
+- `breezy-desktop/gnome/src/math.js` - Math utilities
+- `breezy-desktop/gnome/src/devicedatastream.js` - IMU data reading
+- `breezy-desktop/kwin/src/breezydesktopeffect.cpp` - KDE implementation
+
+### Phase 2: Create XFCE4 Backend Structure
+
+**Goal:** Create `breezy-desktop/xfce4/` directory structure
+
+**Tasks:**
+
+1. Create directory structure:
+
+   - `breezy-desktop/xfce4/src/` - Backend implementation
+   - `breezy-desktop/xfce4/renderer/` - 3D renderer application
+   - `breezy-desktop/xfce4/bin/` - Setup/install scripts
+
+2. Create virtual display creation module:
+
+   - `breezy-desktop/xfce4/src/virtualdisplay_xfce4.py` - Virtual display creation via xrandr
+   - `breezy-desktop/xfce4/src/xfce4_backend.py` - Backend interface
+
+3. Create 3D renderer application:
+
+   - `breezy-desktop/xfce4/renderer/breezy_xfce4_renderer.c` (or `.py`)
+   - `breezy-desktop/xfce4/renderer/shaders/` - GLSL shader files
+
+**Files to create:**
+
+- `breezy-desktop/xfce4/src/xfce4_backend.py`
+- `breezy-desktop/xfce4/src/virtualdisplay_xfce4.py`
+- `breezy-desktop/xfce4/renderer/breezy_xfce4_renderer.c` (or `.py`)
+- `breezy-desktop/xfce4/renderer/shaders/vertex.glsl`
+- `breezy-desktop/xfce4/renderer/shaders/fragment.glsl`
+- `breezy-desktop/xfce4/bin/breezy_xfce4_setup`
+
+### Phase 3: Implement Virtual Display Creation
+
+**Goal:** Create virtual displays on XFCE4 using xrandr
+
+**Tasks:**
+
+1. Implement virtual display creation:
+
+   - Use `xrandr --newmode` and `xrandr --addmode` to create virtual outputs
+   - Use `cvt` to generate modelines
+   - Register virtual displays with X server
+
+2. Implement display management:
+
+   - List virtual displays
+   - Remove virtual displays
+   - Handle display lifecycle
+
+3. Integrate with renderer:
+
+   - Communicate display geometry to renderer
+   - Handle display creation/destruction events
+
+**Implementation:**
+
+- Use xrandr to create virtual outputs (similar to existing `virtualdisplay_xfce4.py`)
+- Store display metadata (width, height, position, ID)
+- Communicate with renderer via IPC (shared memory or D-Bus)
+
+### Phase 4: Implement 3D Renderer Application
+
+**Goal:** Create standalone OpenGL application that renders virtual displays in 3D space
+
+**Tasks:**
+
+1. Implement multi-threaded architecture:
+
+   - **Capture Thread:** Non-blocking X11 screen capture
+     - Runs independently of render thread
+     - May capture at lower rate than glasses refresh rate
+     - Updates shared frame buffer (thread-safe)
+   - **Render Thread:** Matches glasses refresh rate
+     - Always renders at glasses' refresh rate (60Hz/72Hz)
+     - Uses latest captured frame (never blocks on capture)
+     - Reads IMU data and applies 3D transformations
+     - Renders to AR glasses display via OpenGL
+   - **Frame Buffer Management:**
+     - Thread-safe frame buffer (mutex or lock-free ring buffer)
+     - Capture thread writes latest frame
+     - Render thread reads latest frame (non-blocking)
+
+2. Implement X11 screen capture (Capture Thread):
+
+   - Capture virtual display content using X11 APIs (XShmGetImage, XGetImage, or XComposite)
+   - Convert to OpenGL texture format
+   - Handle multiple virtual displays
+   - Update shared frame buffer (thread-safe)
+
+3. Implement IMU data reading (Render Thread):
+
+   - Read from `/dev/shm/breezy_desktop_imu` (shared memory)
+   - Parse data layout (see `breezy-desktop/gnome/src/devicedatastream.js`)
+   - Extract quaternions, position, timestamps
+   - Update per-frame (at render rate)
+
+4. Port GLSL shaders from GNOME:
+
+   - Port vertex shader from `virtualdisplayeffect.js`
+   - Port fragment shader (if any)
+   - Port math functions (quaternion operations, FOV calculations)
+
+5. Implement 3D rendering (Render Thread):
+
+   - Create OpenGL context
+   - Set up projection matrix (perspective)
+   - Apply quaternion transformations based on latest IMU data
+   - Render latest captured frame to AR glasses display (X11 output)
+   - Synchronize with glasses refresh rate (VSync)
+
+6. Implement display management:
+
+   - Handle multiple virtual displays
+   - Apply individual transformations per display
+   - Support follow mode (fixed vs. following head)
+
+**Key Implementation Details:**
+
+- **Multi-Threading:** Capture and render must be in separate threads to prevent blocking
+- **Frame Rate:** Render thread MUST match glasses refresh rate (60Hz/72Hz), never drop frames
+- **Screen Capture:** Use XShmGetImage or XGetImage (XComposite may be faster but requires compositor)
+- **Frame Buffer:** Use mutex-protected buffer or lock-free ring buffer for thread-safe frame sharing
+- **IMU Data:** Read from shared memory file, parse binary layout (see `breezy_desktop.c`)
+- **Shaders:** Port from `virtualdisplayeffect.js` - includes quaternion math, FOV calculations, look-ahead prediction
+- **VSync:** Enable OpenGL VSync to match glasses refresh rate
+
+**Files to create/modify:**
+
+- `breezy-desktop/xfce4/renderer/breezy_xfce4_renderer.c` (or `.py`)
+- `breezy-desktop/xfce4/renderer/capture_thread.c` (or `.py`)
+- `breezy-desktop/xfce4/renderer/render_thread.c` (or `.py`)
+- `breezy-desktop/xfce4/renderer/frame_buffer.c` (or `.py`) - Thread-safe frame buffer
+- `breezy-desktop/xfce4/renderer/shaders/vertex.glsl`
+- `breezy-desktop/xfce4/renderer/shaders/fragment.glsl`
+- `breezy-desktop/xfce4/renderer/imu_reader.c` (or `.py`)
+
+### Phase 5: Integrate with Breezy Desktop UI
+
+**Goal:** Make XFCE4 backend work with existing breezy-desktop UI
+
+**Tasks:**
+
+1. Update UI to detect XFCE4:
+
+   - Already done in `extensionsmanager.py`
+   - Load XFCE4 backend instead of GNOME/KDE
+
+2. Integrate virtual display management:
+
+   - Update `virtualdisplaymanager.py` to use XFCE4 backend
+   - Start/stop 3D renderer application
+   - Handle display creation/destruction
+
+3. Test XR driver integration:
+
+   - Display distance control
+   - Follow mode toggle
+   - Widescreen mode
+   - Recenter functionality
+
+**Files to modify:**
+
+- `breezy-desktop/ui/src/virtualdisplaymanager.py` - Already partially done
+- `breezy-desktop/ui/src/window.py` - Already partially done
+
+### Phase 6: Update Build and Installation
+
+**Goal:** Add XFCE4 support to build system and installation scripts
+
+**Tasks:**
+
+1. Update build system:
+
+   - Add 3D renderer to build (C/C++ or Python)
+   - Handle OpenGL dependencies
+   - Handle X11 development libraries
+
+2. Create installation script:
+
+   - `breezy-desktop/xfce4/bin/breezy_xfce4_setup`
+   - Install dependencies (OpenGL, X11, etc.)
+   - Build/install renderer application
+
+3. Update documentation:
+
+   - Add XFCE4 setup instructions
+   - Document 3D rendering architecture
+   - Document limitations/differences
+
+**Files to modify:**
+
+- `breezy-desktop/README.md` - Add XFCE4 section
+- `breezy-desktop/xfce4/README.md` - Document architecture
+- Build system files (meson.build, CMakeLists.txt, etc.)
+
+## Key Technical Challenges
+
+1. **3D Rendering Pipeline:** Creating a standalone OpenGL application that replicates compositor functionality
+2. **Frame Rate Synchronization:** Ensuring render thread matches glasses refresh rate (60Hz/72Hz) while capture may be slower
+3. **Multi-Threading Architecture:** Implementing non-blocking capture thread that doesn't affect render performance
+4. **Thread-Safe Frame Buffer:** Efficient frame buffer sharing between capture and render threads (mutex or lock-free)
+5. **Shader Porting:** Porting complex GLSL shaders from GNOME's Cogl to standard OpenGL
+6. **X11 Screen Capture:** Efficiently capturing virtual display content (may be slower than render rate)
+7. **IMU Data Parsing:** Reading and parsing binary shared memory format
+8. **Performance:** Ensuring smooth 60fps rendering with low latency, never dropping frames
+
+## Success Criteria
+
+- ✅ Can create virtual displays on XFCE4
+- ✅ Virtual displays appear in XFCE4 desktop environment
+- ✅ **Virtual displays render in 3D space in AR glasses** (CRITICAL)
+- ✅ Follow mode works (display can be fixed or follow head)
+- ✅ All XR driver controls work (distance, widescreen, etc.)
+- ✅ UI can manage virtual displays (create/remove)
+- ✅ Smooth 60fps rendering with low latency (matches glasses refresh rate)
+- ✅ Non-blocking screen capture (separate thread, doesn't affect render rate)
+- ✅ Frame rate synchronization (render never drops below glasses refresh rate)
+
+## Implementation Language Decision
+
+**Recommendation:** Start with **Python + PyOpenGL** for faster development and easier integration, then optimize to C/C++ if performance is insufficient.
+
+**Python Advantages:**
+
+- Easier integration with existing Python codebase
+- Faster development iteration
+- Easier to debug and test
+- Can use existing Python libraries (numpy for math, etc.)
+
+**C/C++ Advantages:**
+
+- Better performance (critical for 60fps rendering)
+- Lower latency
+- More control over memory management
+
+**Hybrid Approach:**
+
+- Use Python for backend and UI integration
+- Use C/C++ for the 3D renderer (compiled as separate binary)
+- Communicate via IPC (shared memory or D-Bus)
