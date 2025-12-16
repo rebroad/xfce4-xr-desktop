@@ -37,7 +37,9 @@ fi
 
 # Install Python package
 echo "Installing Python package..."
-pip3 install --user -e .
+# Note: --break-system-packages is required due to PEP 668, but we're using --user
+# so we're not actually breaking system packages - just installing to ~/.local
+pip3 install --user --break-system-packages -e .
 
 # Create desktop entry
 echo "Creating desktop entry..."

@@ -34,6 +34,23 @@ class XRManager(GObject.Object):
             # Check if device is connected
             self._check_device_connection()
             
+            # Enable Breezy Desktop mode (required for smooth_follow commands to work)
+            # This sets output_mode=external_only and external_mode=breezy_desktop
+            import subprocess
+            try:
+                result = subprocess.run([self._cli_path, '--breezy-desktop'],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    self.logger.info("Breezy Desktop mode enabled")
+                else:
+                    self.logger.warning(f"Failed to enable Breezy Desktop mode: {result.stderr}")
+            except Exception as e:
+                self.logger.warning(f"Could not enable Breezy Desktop mode: {str(e)}")
+
+            # Wait a moment for mode to activate
+            import time
+            time.sleep(0.5)
+
             # Set up initial state
             self._write_control('breezy_desktop_display_distance', str(self._display_distance))
             self._write_control('enable_breezy_desktop_smooth_follow', 'true' if self._follow_mode else 'false')

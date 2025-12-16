@@ -1,4 +1,6 @@
 import logging
+import gi
+gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GObject
 from core.xr_manager import XRManager
 from utils.config import Config
@@ -122,6 +124,9 @@ class MainWindow(Gtk.Window):
 
     def setup_signals(self):
         """Set up signal connections."""
+        # Connect window close event to quit properly
+        self.connect('delete-event', self._on_window_delete)
+
         # Connect to XR manager signals
         self.xr_manager.connect('device-connected', self._on_device_connected)
         self.xr_manager.connect('display-distance-changed', self._on_display_distance_changed)
@@ -183,3 +188,11 @@ class MainWindow(Gtk.Window):
     def _on_refresh_clicked(self, button):
         """Handle refresh button click."""
         self.xr_manager._check_device_connection()
+
+    def _on_window_delete(self, widget, event):
+        """Handle window close event."""
+        self.logger.info("Window closing, cleaning up...")
+        if self.xr_manager:
+            self.xr_manager.cleanup()
+        Gtk.main_quit()
+        return False  # Allow the window to be destroyed

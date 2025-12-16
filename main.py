@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import logging
+import signal
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
@@ -15,6 +16,17 @@ class XFCE4XRDesktop:
         self.xr_manager = XRManager()
         self.main_window = None
         
+        # Set up signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+    def _signal_handler(self, signum, frame):
+        """Handle interrupt signals gracefully."""
+        self.logger.info(f"Received signal {signum}, shutting down...")
+        if self.main_window:
+            self.main_window.destroy()
+        Gtk.main_quit()
+
     def _setup_logging(self):
         logger = logging.getLogger('xfce4_xr_desktop')
         logger.setLevel(logging.DEBUG)
@@ -45,6 +57,9 @@ class XFCE4XRDesktop:
             Gtk.main()
             return True
 
+        except KeyboardInterrupt:
+            self.logger.info("Interrupted by user")
+            return True
         except Exception as e:
             self.logger.error(f"Error running application: {str(e)}")
             return False

@@ -5,12 +5,12 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
-        'gi>=3.38.0',
         'numpy>=1.21.0',
-        'pygobject>=3.38.0',
         'python-xlib>=0.33',
         'evdev>=1.6.1'
     ],
+    # Note: gi (PyGObject) must be installed via system package manager:
+    # sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0
     entry_points={
         'console_scripts': [
             'xfce4-xr-desktop=main:main',
