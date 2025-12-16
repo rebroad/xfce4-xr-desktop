@@ -1,6 +1,6 @@
 import os
 import logging
-from gi.repository import GObject, Gdk
+from gi.repository import GObject
 
 class XRManager(GObject.Object):
     __gsignals__ = {
