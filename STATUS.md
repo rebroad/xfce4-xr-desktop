@@ -38,7 +38,10 @@
 2. ✅ **FIXED**: Recenter button signal connection added
 3. ✅ **FIXED**: Refresh button added to UI
 4. **Keybindings Not Implemented**: `setup_keybindings()` method is empty (TODO comment)
-5. **XR Driver Not Installed**: The XR driver CLI (`xr_driver_cli`) is not currently installed
+5. ✅ **XFCE4 Integration Complete**: xfce4-xr-desktop updated to use XRLinuxDriver's native command names
+   - Commands renamed to match XRLinuxDriver: `breezy_desktop_display_distance`, `enable_breezy_desktop_smooth_follow`, etc.
+   - State file now includes `device_connected` flag (added to XRLinuxDriver)
+   - Ready to build and test (see `~/src/XRLinuxDriver/BUILD_NOTES.md`)
 
 ## 🔧 What Needs to be Done
 
@@ -60,15 +63,16 @@
 
 ## 📋 Installation Status
 
-- **XR Driver**: Not installed (need XFCE4-compatible XR driver - **NOT Breezy Desktop**, which is GNOME/KDE only)
+- **XR Driver**: XFCE4-compatible version created at `~/src/XRLinuxDriver` (needs to be built and installed)
 - **Python Dependencies**: Need to verify with `pip install -r requirements.txt`
-- **System Dependencies**: Need to verify `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-xfce4ui-2`
+- **System Dependencies**: Need to verify `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`
 
 ## 🚀 Next Steps
 
 1. ✅ **DONE**: Fix the import issues
 2. ✅ **DONE**: Complete the missing UI connections
-3. **Install XR driver** - This is the main blocker for testing
-4. **Test the application** - Once XR driver is installed
-5. **Implement keybindings** - XFCE4 global keybinding integration
+3. ✅ **DONE**: Create XFCE4-compatible XR driver plugin
+4. **Build and install XR driver** - Build from `~/src/XRLinuxDriver` (see BUILD_NOTES.md)
+5. **Test the application** - Once XR driver is built and installed
+6. **Implement keybindings** - XFCE4 global keybinding integration
 

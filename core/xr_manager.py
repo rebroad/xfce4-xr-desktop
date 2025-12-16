@@ -35,9 +35,9 @@ class XRManager(GObject.Object):
             self._check_device_connection()
             
             # Set up initial state
-            self._write_control('display_distance', str(self._display_distance))
-            self._write_control('follow_mode', 'true' if self._follow_mode else 'false')
-            self._write_control('follow_threshold', str(self._follow_threshold))
+            self._write_control('breezy_desktop_display_distance', str(self._display_distance))
+            self._write_control('enable_breezy_desktop_smooth_follow', 'true' if self._follow_mode else 'false')
+            self._write_control('breezy_desktop_follow_threshold', str(self._follow_threshold))
             
             return True
         except Exception as e:
@@ -47,7 +47,10 @@ class XRManager(GObject.Object):
     def cleanup(self):
         """Clean up resources and disable XR mode."""
         try:
-            self._write_control('disable_xr', 'true')
+            # XRLinuxDriver doesn't have a disable_xr command via control flags
+            # The driver can be disabled via config file or CLI, but not via control flags
+            # For now, just disable follow mode
+            self._write_control('enable_breezy_desktop_smooth_follow', 'false')
         except Exception as e:
             self.logger.error(f"Error during cleanup: {str(e)}")
 
@@ -95,7 +98,7 @@ class XRManager(GObject.Object):
         """Set the display distance in meters."""
         try:
             self._display_distance = float(distance)
-            self._write_control('display_distance', str(self._display_distance))
+            self._write_control('breezy_desktop_display_distance', str(self._display_distance))
             self.emit('display-distance-changed', self._display_distance)
         except Exception as e:
             self.logger.error(f"Error setting display distance: {str(e)}")
@@ -104,7 +107,9 @@ class XRManager(GObject.Object):
         """Toggle widescreen mode."""
         try:
             self._widescreen_mode = not self._widescreen_mode
-            self._write_control('widescreen_mode', 'true' if self._widescreen_mode else 'false')
+            # XRLinuxDriver uses sbs_mode with "enable" or "disable" values
+            sbs_value = 'enable' if self._widescreen_mode else 'disable'
+            self._write_control('sbs_mode', sbs_value)
             self.emit('widescreen-mode-changed', self._widescreen_mode)
         except Exception as e:
             self.logger.error(f"Error toggling widescreen mode: {str(e)}")
@@ -113,7 +118,8 @@ class XRManager(GObject.Object):
         """Toggle smooth follow mode."""
         try:
             self._follow_mode = not self._follow_mode
-            self._write_control('follow_mode', 'true' if self._follow_mode else 'false')
+            # XRLinuxDriver uses enable_breezy_desktop_smooth_follow with true/false
+            self._write_control('enable_breezy_desktop_smooth_follow', 'true' if self._follow_mode else 'false')
         except Exception as e:
             self.logger.error(f"Error toggling follow mode: {str(e)}")
 
@@ -121,14 +127,14 @@ class XRManager(GObject.Object):
         """Set the follow threshold in radians."""
         try:
             self._follow_threshold = float(threshold)
-            self._write_control('follow_threshold', str(self._follow_threshold))
+            self._write_control('breezy_desktop_follow_threshold', str(self._follow_threshold))
         except Exception as e:
             self.logger.error(f"Error setting follow threshold: {str(e)}")
 
     def recenter_display(self):
         """Recenter the display position."""
         try:
-            self._write_control('recenter', 'true')
+            self._write_control('recenter_screen', 'true')
         except Exception as e:
             self.logger.error(f"Error recentering display: {str(e)}")
 

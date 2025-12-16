@@ -73,13 +73,14 @@ pip3 install --user -r requirements.txt
    - Create desktop entry and autostart entry
 
 4. **Install XR Driver:**
-   - **Important:** Breezy Desktop only works with GNOME/KDE, not XFCE4
-   - You'll need an XR driver that works with XFCE4 and provides:
+   - **XRLinuxDriver:** xfce4-xr-desktop uses XRLinuxDriver's native command names
+   - Build and install from: `~/src/XRLinuxDriver`
+   - See `~/src/XRLinuxDriver/BUILD_NOTES.md` for build instructions
+   - The XRLinuxDriver provides:
 	 - `~/.local/bin/xr_driver_cli`
-	 - `/dev/shm/xr_driver_control`
-	 - `/dev/shm/xr_driver_state`
-   - Check XReal's official Linux driver documentation
-   - The driver must be desktop-environment agnostic or specifically support XFCE4
+	 - `/dev/shm/xr_driver_control` (xfce4-xr-desktop writes commands directly)
+	 - `/dev/shm/xr_driver_state` (includes `device_connected` flag)
+   - **Note:** Breezy Desktop only works with GNOME/KDE, but XRLinuxDriver itself is desktop-agnostic and works with XFCE4
 
 ## Testing
 
