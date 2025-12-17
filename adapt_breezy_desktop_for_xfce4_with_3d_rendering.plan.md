@@ -4,15 +4,15 @@ overview: Adapt breezy-desktop to support XFCE4 by creating an XFCE4 backend tha
 todos:
   - id: research_3d_rendering
     content: "Research 3D rendering requirements: study GNOME/KDE shader code, design standalone renderer architecture, choose implementation language (Python vs C/C++)"
-    status: pending
+    status: completed
   - id: create_xfce4_backend_structure
     content: Create breezy-desktop/xfce4/ directory structure (src/, renderer/, bin/) and backend interface files
-    status: pending
+    status: completed
     dependencies:
       - research_3d_rendering
   - id: implement_virtual_display_creation
     content: Implement virtual display creation for XFCE4 using xrandr (newmode, addmode, etc.)
-    status: pending
+    status: in_progress
     dependencies:
       - create_xfce4_backend_structure
   - id: implement_3d_renderer
@@ -69,6 +69,7 @@ todos:
 │                    Breezy Desktop UI                       │
 │              (Python GTK4 - already exists)                │
 └──────────────────────┬─────────────────────────────────────┘
+
                        │
                        │ Creates/manages virtual displays
                        │
@@ -189,21 +190,22 @@ todos:
 
 ### Phase 3: Implement Virtual Display Creation
 
-**Goal:** Create virtual displays on XFCE4 using xrandr
+**Goal:** Create virtual displays on XFCE4 using xrandr, with RANDR/X11 as the source of truth
 
 **Tasks:**
 
-1. Implement virtual display creation:
+1. Implement virtual display creation (initial target: single 3840x2160@60 virtual display):
 
-   - Use `xrandr --newmode` and `xrandr --addmode` to create virtual outputs
-   - Use `cvt` to generate modelines
-   - Register virtual displays with X server
+- Use `cvt 3840 2160 60` to generate a 4K modeline
+- Use `xrandr --newmode` and `xrandr --addmode` to attach the mode to a configured dummy output (for example `VIRTUAL1`)
+- Use `xrandr --output VIRTUAL1 --mode 3840x2160_60.00` (or equivalent) to activate it
 
 2. Implement display management:
 
    - List virtual displays
    - Remove virtual displays
    - Handle display lifecycle
+- When deciding whether a virtual display is present/active, **query RANDR/X11** (e.g. via `xrandr` or Xlib), never rely solely on any cached JSON state
 
 3. Integrate with renderer:
 
@@ -212,13 +214,14 @@ todos:
 
 **Implementation:**
 
-- Use xrandr to create virtual outputs (similar to existing `virtualdisplay_xfce4.py`)
-- Store display metadata (width, height, position, ID)
+- Use xrandr to create and manage modes on the dummy output (similar to existing `virtualdisplay_xfce4.py`)
+- Store display metadata (width, height, position, ID) in JSON only as auxiliary state (e.g. PIDs and settings), not as the authority on whether a display really exists
+- Treat RANDR/X11 as the single source of truth for which virtual displays/modes are active
 - Communicate with renderer via IPC (shared memory or D-Bus)
 
 ### Phase 4: Implement 3D Renderer Application
 
-**Goal:** Create standalone OpenGL application that renders virtual displays in 3D space
+**Goal:** Create standalone OpenGL application that renders virtual displays in 3D space, without any synthetic data/stub behaviour.
 
 **Important:** Design the architecture with Phase 2 (direct 3D app rendering) in mind. The renderer should be structured to easily accept both captured 2D frames and direct 3D surfaces in the future.
 
@@ -290,10 +293,28 @@ todos:
 - **Multi-Threading:** Capture and render must be in separate threads to prevent blocking
 - **Frame Rate:** Render thread MUST match glasses refresh rate (60Hz/72Hz), never drop frames
 - **Screen Capture:**
-  - Prefer XShmGetImage (shared memory) for efficiency
-  - XComposite extension if available (faster, but requires compositor)
-  - XGetImage as fallback (slower, more CPU usage)
-  - Consider DRM lease for direct GPU access (advanced)
+  - **XShmGetImage (MIT-SHM)** - Recommended for full-screen virtual display capture
+    - Faster for visible screen content
+    - Lower CPU usage (shared memory)
+    - Check availability: `XShmQueryExtension()` or `xdpyinfo | grep -i shm`
+    - May block under heavy load (mitigate with separate thread)
+  - **XComposite extension** - Alternative if needed
+    - Can capture individual windows (not needed for our use case - we capture full virtual displays)
+    - Accesses compositor's off-screen buffers
+    - Slightly higher overhead
+    - Check availability: `XCompositeQueryExtension()` or `xdpyinfo | grep -i composite`
+    - **Note:** Not needed for Phase 2 (3D apps render directly, no capture)
+  - **XGetImage** - Fallback (slower, more CPU usage)
+  - **DRM lease** - Advanced option for direct GPU access (bypasses X11)
+    - DRM = Direct Rendering Manager (Linux kernel GPU subsystem)
+    - Lowest latency possible
+    - More complex to implement
+    - **DRM access is available** (check `/dev/dri/` and user's video group membership)
+    - **But:** Using DRM directly while X11 is running requires DRM lease (advanced)
+    - X11 "owns" the display, so coordination is needed
+    - **For Phase 1:** X11 screen capture is simpler and sufficient
+    - **For Phase 2:** Direct OpenGL rendering (no DRM needed - apps render directly)
+    - **For Future:** DRM lease could be optimization for even lower latency
 - **Performance Considerations:**
   - xrandr approach adds 1-2 frames latency vs compositor-level
   - Use efficient texture uploads (PBOs, direct texture uploads)
@@ -455,6 +476,7 @@ todos:
    - Apps specify 3D position, rotation, scale in world space
    - Apps can request IMU data for head tracking
    - Apps can query available rendering capabilities
+   - **Important:** 3D apps do NOT use screen capture - they render directly via OpenGL!
 
 2. **Compositing Architecture:**
 
