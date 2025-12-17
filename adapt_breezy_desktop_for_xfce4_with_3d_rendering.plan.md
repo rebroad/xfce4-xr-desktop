@@ -65,53 +65,53 @@ todos:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Breezy Desktop UI                         │
-│              (Python GTK4 - already exists)                  │
-└──────────────────────┬──────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                    Breezy Desktop UI                       │
+│              (Python GTK4 - already exists)                │
+└──────────────────────┬─────────────────────────────────────┘
                        │
                        │ Creates/manages virtual displays
                        │
         ┌──────────────┴──────────────┐
         │                             │
         ▼                             ▼
-┌───────────────┐          ┌──────────────────────────────────┐
-│  XFCE4 Backend│          │      3D Renderer App             │
+┌───────────────┐          ┌─────────────────────────────────┐
+│  XFCE4 Backend│          │      3D Renderer App            │
 │  (Python)     │          │  (C/C++ or Python + PyOpenGL)   │
-│               │          │                                  │
+│               │          │                                 │
 │  - Creates    │          │  ┌────────────────────────────┐ │
-│    virtual    │          │  │  Capture Thread (Phase 1)   │ │
-│    displays   │─────────▶│  │  (X11 screen capture)     │ │
-│    via xrandr │          │  │  - Non-blocking           │ │
-│               │          │  │  - May be slower than     │ │
+│    virtual    │          │  │  Capture Thread (Phase 1)  │ │
+│    displays   │─────────▶│  │  (X11 screen capture)      │ │
+│    via xrandr │          │  │  - Non-blocking            │ │
+│               │          │  │  - May be slower than      │ │
 │               │          │  │    glasses refresh rate    │ │
-│               │          │  └──────────┬───────────────┘ │
-│               │          │             │ Latest frame    │
-│               │          │             ▼                 │
+│               │          │  └──────────┬─────────────────┘ │
+│               │          │             │ Latest frame      │
+│               │          │             ▼                   │
 │               │          │  ┌────────────────────────────┐ │
-│               │          │  │  3D App API (Phase 2)     │ │
-│               │          │  │  (Direct 3D rendering)    │ │
-│               │          │  │  - Apps render directly   │ │
-│               │          │  │  - Bypass X11 capture     │ │
+│               │          │  │  3D App API (Phase 2)      │ │
+│               │          │  │  (Direct 3D rendering)     │ │
+│               │          │  │  - Apps render directly    │ │
+│               │          │  │  - Bypass X11 capture      │ │
 │               │          │  │  - Register 3D surfaces    │ │
-│               │          │  └──────────┬───────────────┘ │
-│               │          │             │                 │
-│               │          │             ▼                 │
+│               │          │  └──────────┬─────────────────┘ │
+│               │          │             │                   │
+│               │          │             ▼                   │
 │               │          │  ┌────────────────────────────┐ │
-│               │          │  │  Render Thread              │ │
-│               │          │  │  (OpenGL compositor)        │ │
-│               │          │  │  - Matches glasses refresh  │ │
+│               │          │  │  Render Thread             │ │
+│               │          │  │  (OpenGL compositor)       │ │
+│               │          │  │  - Matches glasses refresh │ │
 │               │          │  │  - Composites 2D + 3D      │ │
 │               │          │  │  - Reads IMU data          │ │
-│               │          │  │  - Applies 3D transforms  │ │
-│               │          │  └──────────┬──────────────────┘ │
-└───────────────┘          └────────────┼──────────────────────┘
+│               │          │  │  - Applies 3D transforms   │ │
+│               │          │  └───────┬────────────────────┘ │
+└───────────────┘          └──────────┼──────────────────────┘
                                       │ Renders to AR glasses
                                       │ (at glasses refresh rate)
                                       ▼
                            ┌──────────────────────┐
                            │   XRLinuxDriver      │
-                           │  (provides IMU data)  │
+                           │  (provides IMU data) │
                            └──────────────────────┘
 ```
 
@@ -254,11 +254,21 @@ todos:
    - Extract quaternions, position, timestamps
    - Update per-frame (at render rate)
 
-4. Port GLSL shaders from GNOME:
+4. Port GLSL shaders and math from GNOME/KDE:
 
-   - Port vertex shader from `virtualdisplayeffect.js`
-   - Port fragment shader (if any)
-   - Port math functions (quaternion operations, FOV calculations)
+   - **Port vertex shader from `virtualdisplayeffect.js`** (lines 489-538) - This is portable GLSL!
+     - Quaternion operations (quatConjugate, applyQuaternionToVector)
+     - Rotation functions (applyXRotationToVector, applyYRotationToVector)
+     - Coordinate system conversions (nwuToESU)
+     - Look-ahead prediction calculations
+     - FOV and projection matrix handling
+   - **Port math functions from `math.js`** - Convert JavaScript to C/C++/Python:
+     - `diagonalToCrossFOVs()` - FOV calculations
+     - `applyQuaternionToVector()` - Quaternion math
+     - `fovConversionFns` - FOV conversion for flat/curved displays
+     - `normalizeVector()` - Vector normalization
+   - **Port fragment shader from KWin** (`cursorOverlay.frag`) - Cursor overlay rendering
+   - **Study KWin's mesh generation** (`CurvableDisplayMesh.qml`) - For curved display support
 
 5. Implement 3D rendering (Render Thread):
 
@@ -279,10 +289,21 @@ todos:
 
 - **Multi-Threading:** Capture and render must be in separate threads to prevent blocking
 - **Frame Rate:** Render thread MUST match glasses refresh rate (60Hz/72Hz), never drop frames
-- **Screen Capture:** Use XShmGetImage or XGetImage (XComposite may be faster but requires compositor)
+- **Screen Capture:**
+  - Prefer XShmGetImage (shared memory) for efficiency
+  - XComposite extension if available (faster, but requires compositor)
+  - XGetImage as fallback (slower, more CPU usage)
+  - Consider DRM lease for direct GPU access (advanced)
+- **Performance Considerations:**
+  - xrandr approach adds 1-2 frames latency vs compositor-level
+  - Use efficient texture uploads (PBOs, direct texture uploads)
+  - Keep capture thread non-blocking (already planned)
+  - Expected: 60fps achievable, but with slightly higher latency
 - **Frame Buffer:** Use mutex-protected buffer or lock-free ring buffer for thread-safe frame sharing
 - **IMU Data:** Read from shared memory file, parse binary layout (see `breezy_desktop.c`)
 - **Shaders:** Port from `virtualdisplayeffect.js` - includes quaternion math, FOV calculations, look-ahead prediction
+  - **Code Reuse:** The GLSL shader code is portable and can be used directly!
+  - **Math Functions:** Port JavaScript math functions from `math.js` to C/C++/Python
 - **VSync:** Enable OpenGL VSync to match glasses refresh rate
 
 **Files to create/modify:**
@@ -291,8 +312,9 @@ todos:
 - `breezy-desktop/xfce4/renderer/capture_thread.c` (or `.py`)
 - `breezy-desktop/xfce4/renderer/render_thread.c` (or `.py`)
 - `breezy-desktop/xfce4/renderer/frame_buffer.c` (or `.py`) - Thread-safe frame buffer
-- `breezy-desktop/xfce4/renderer/shaders/vertex.glsl`
-- `breezy-desktop/xfce4/renderer/shaders/fragment.glsl`
+- `breezy-desktop/xfce4/renderer/shaders/vertex.glsl` - **Port from `virtualdisplayeffect.js` (lines 489-538)**
+- `breezy-desktop/xfce4/renderer/shaders/fragment.glsl` - Port from KWin's `cursorOverlay.frag`
+- `breezy-desktop/xfce4/renderer/math_utils.c` (or `.py`) - **Port math functions from `math.js`**
 - `breezy-desktop/xfce4/renderer/imu_reader.c` (or `.py`)
 
 ### Phase 5: Integrate with Breezy Desktop UI
@@ -487,3 +509,80 @@ todos:
 - Allows mixed 2D/3D desktop environments
 
 **Note:** Phase 1 (2D apps via X11 capture) remains available for applications that don't need 3D rendering or prefer the simpler approach. Both modes can coexist on the same desktop.
+
+## Architecture Clarification: Compositor vs. Specialized Renderer
+
+**Important Distinction:** We are NOT building a full compositor replacement. We're building a specialized 3D renderer that works alongside XFCE4's existing compositor.
+
+### XFCE4's Existing Compositor (Xfwm4)
+
+- **XFCE4 DOES have a compositor** - it's called Xfwm4 (XFCE Window Manager)
+- It handles normal desktop compositing (shadows, transparency, window effects)
+- It's lightweight and designed for traditional 2D desktop use
+- It does NOT have:
+  - Advanced 3D rendering capabilities
+  - Plugin/extension APIs like Mutter/KWin
+  - Virtual display creation APIs
+  - Direct integration with AR glasses rendering
+
+### What We're Building
+
+- **Specialized 3D Renderer** (not a full compositor)
+- Works **ALONGSIDE** Xfwm4, not replacing it
+- Xfwm4 continues to handle normal desktop compositing
+- Our renderer only handles:
+  - Virtual display creation (via xrandr)
+  - 3D transformation of captured content
+  - Rendering to AR glasses display
+  - Future: Direct 3D app rendering
+
+### Why Not Base It on Mutter or KWin?
+
+**Mutter (GNOME):**
+
+- Deeply integrated with GNOME Shell
+- Not just a compositor - it's the window manager, compositor, and shell all in one
+- Tightly coupled to GNOME's architecture (GObject, Clutter, etc.)
+- Extracting just the rendering parts would require:
+  - Rewriting large portions to remove GNOME dependencies
+  - Essentially rebuilding it from scratch anyway
+
+**KWin (KDE):**
+
+- Integrated with KDE's Qt-based architecture
+- Tightly coupled to KDE's window management system
+- Uses QtQuick3D for 3D rendering (Qt-specific)
+- Similar issues to Mutter - too tightly integrated
+
+**Our Approach:**
+
+- Build a specialized, lightweight renderer from scratch
+- Focused only on AR glasses rendering (not full desktop compositing)
+- Can be simpler and more maintainable than extracting from Mutter/KWin
+- Designed specifically for XFCE4's architecture
+
+### The "Foolish" Question: Should We Just Use GNOME?
+
+**Arguments FOR using GNOME:**
+
+- ✅ Breezy Desktop already works on GNOME
+- ✅ Mutter already has all the compositor capabilities
+- ✅ Less development work
+- ✅ More stable (already tested)
+
+**Arguments FOR building for XFCE4:**
+
+- ✅ You prefer XFCE4's workflow/UI/philosophy
+- ✅ XFCE4 is lighter weight
+- ✅ More control over the implementation
+- ✅ Specialized solution can be optimized for AR glasses use case
+- ✅ Not tied to GNOME's architecture decisions
+
+**The Reality:**
+
+- If you're happy with GNOME, use GNOME - it's the path of least resistance
+- If you prefer XFCE4, building a specialized renderer is reasonable
+- The specialized renderer can be simpler than a full compositor
+- It's a trade-off: more development work vs. using your preferred desktop
+
+**Recommendation:** If you're unsure, try GNOME with Breezy Desktop first. If you find GNOME's workflow acceptable, stick with it. If you strongly prefer XFCE4, then building the specialized renderer makes sense.
