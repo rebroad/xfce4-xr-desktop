@@ -80,7 +80,7 @@ todos:
 │  (Python)     │          │  (C/C++ or Python + PyOpenGL)   │
 │               │          │                                  │
 │  - Creates    │          │  ┌────────────────────────────┐ │
-│    virtual    │          │  │  Capture Thread           │ │
+│    virtual    │          │  │  Capture Thread (Phase 1)   │ │
 │    displays   │─────────▶│  │  (X11 screen capture)     │ │
 │    via xrandr │          │  │  - Non-blocking           │ │
 │               │          │  │  - May be slower than     │ │
@@ -89,11 +89,19 @@ todos:
 │               │          │             │ Latest frame    │
 │               │          │             ▼                 │
 │               │          │  ┌────────────────────────────┐ │
+│               │          │  │  3D App API (Phase 2)     │ │
+│               │          │  │  (Direct 3D rendering)    │ │
+│               │          │  │  - Apps render directly   │ │
+│               │          │  │  - Bypass X11 capture     │ │
+│               │          │  │  - Register 3D surfaces    │ │
+│               │          │  └──────────┬───────────────┘ │
+│               │          │             │                 │
+│               │          │             ▼                 │
+│               │          │  ┌────────────────────────────┐ │
 │               │          │  │  Render Thread              │ │
-│               │          │  │  (OpenGL rendering)         │ │
+│               │          │  │  (OpenGL compositor)        │ │
 │               │          │  │  - Matches glasses refresh  │ │
-│               │          │  │  - Always renders latest   │ │
-│               │          │  │    captured frame          │ │
+│               │          │  │  - Composites 2D + 3D      │ │
 │               │          │  │  - Reads IMU data          │ │
 │               │          │  │  - Applies 3D transforms  │ │
 │               │          │  └──────────┬──────────────────┘ │
@@ -212,6 +220,8 @@ todos:
 
 **Goal:** Create standalone OpenGL application that renders virtual displays in 3D space
 
+**Important:** Design the architecture with Phase 2 (direct 3D app rendering) in mind. The renderer should be structured to easily accept both captured 2D frames and direct 3D surfaces in the future.
+
 **Tasks:**
 
 1. Implement multi-threaded architecture:
@@ -252,11 +262,12 @@ todos:
 
 5. Implement 3D rendering (Render Thread):
 
-   - Create OpenGL context
+   - Create OpenGL context (design for future context sharing with 3D apps)
    - Set up projection matrix (perspective)
    - Apply quaternion transformations based on latest IMU data
    - Render latest captured frame to AR glasses display (X11 output)
    - Synchronize with glasses refresh rate (VSync)
+   - **Design compositing pipeline to accept both 2D (captured) and 3D (direct) content** (for Phase 2)
 
 6. Implement display management:
 
@@ -345,6 +356,8 @@ todos:
 
 ## Key Technical Challenges
 
+**Phase 1 (2D Apps):**
+
 1. **3D Rendering Pipeline:** Creating a standalone OpenGL application that replicates compositor functionality
 2. **Frame Rate Synchronization:** Ensuring render thread matches glasses refresh rate (60Hz/72Hz) while capture may be slower
 3. **Multi-Threading Architecture:** Implementing non-blocking capture thread that doesn't affect render performance
@@ -354,7 +367,17 @@ todos:
 7. **IMU Data Parsing:** Reading and parsing binary shared memory format
 8. **Performance:** Ensuring smooth 60fps rendering with low latency, never dropping frames
 
+**Phase 2 (3D Apps - Future):**
+
+9. **3D Application API:** Design API/protocol for apps to register 3D rendering surfaces
+10. **Compositing Architecture:** Efficiently composite 2D (captured) and 3D (direct) content together
+11. **OpenGL Context Sharing:** Allow apps to share OpenGL context with renderer for direct rendering
+12. **Synchronization:** Coordinate rendering between multiple 3D apps and 2D capture
+13. **Resource Management:** Manage GPU resources for both 2D capture and 3D direct rendering
+
 ## Success Criteria
+
+**Phase 1 (2D Apps):**
 
 - ✅ Can create virtual displays on XFCE4
 - ✅ Virtual displays appear in XFCE4 desktop environment
@@ -365,6 +388,14 @@ todos:
 - ✅ Smooth 60fps rendering with low latency (matches glasses refresh rate)
 - ✅ Non-blocking screen capture (separate thread, doesn't affect render rate)
 - ✅ Frame rate synchronization (render never drops below glasses refresh rate)
+
+**Phase 2 (3D Apps - Future):**
+
+- ✅ Applications can render directly in 3D to AR glasses (bypass X11 capture)
+- ✅ 2D and 3D content can be composited together on the same desktop
+- ✅ API/protocol for apps to register 3D rendering surfaces
+- ✅ Multiple 3D apps can render simultaneously
+- ✅ Performance remains smooth with mixed 2D/3D content
 
 ## Implementation Language Decision
 
@@ -388,3 +419,71 @@ todos:
 - Use Python for backend and UI integration
 - Use C/C++ for the 3D renderer (compiled as separate binary)
 - Communicate via IPC (shared memory or D-Bus)
+
+## Future Architecture: Direct 3D Application Rendering (Phase 2)
+
+**Goal:** Allow applications to render directly in 3D to AR glasses, bypassing X11 screen capture. This enables true 3D desktop applications alongside traditional 2D applications.
+
+**Design Considerations:**
+
+1. **API/Protocol Design:**
+
+   - D-Bus interface or shared memory protocol for apps to register 3D surfaces
+   - Apps provide OpenGL textures or framebuffers directly
+   - Apps specify 3D position, rotation, scale in world space
+   - Apps can request IMU data for head tracking
+   - Apps can query available rendering capabilities
+
+2. **Compositing Architecture:**
+
+   - Renderer maintains list of 2D (captured) and 3D (direct) content
+   - Composite all content in single OpenGL render pass
+   - Apply 3D transformations to both 2D and 3D content
+   - Handle depth sorting and z-ordering
+   - Support transparency and blending
+
+3. **OpenGL Context Sharing:**
+
+   - Renderer provides shared OpenGL context for apps
+   - Apps can create textures/framebuffers in shared context
+   - Efficient texture sharing without copy operations
+   - Support for multiple apps sharing the same context
+
+4. **Synchronization:**
+
+   - Apps render at their own rate (may be different from glasses refresh)
+   - Renderer always uses latest content from each app
+   - Similar to capture thread: non-blocking, use latest frame
+   - Apps can request frame synchronization if needed
+
+5. **Resource Management:**
+
+   - Track GPU memory usage for both 2D capture and 3D direct rendering
+   - Handle app lifecycle (start/stop 3D rendering)
+   - Clean up resources when apps disconnect
+   - Handle app crashes gracefully
+
+6. **Architecture Extensibility:**
+
+   - Design Phase 1 renderer with Phase 2 in mind
+   - Separate compositing logic from capture logic
+   - Make renderer accept both captured frames and direct 3D surfaces
+   - Design API early (even if not implemented) to guide architecture
+
+**Implementation Approach:**
+
+- Design API first (D-Bus or shared memory protocol) before implementing
+- Extend renderer to support both 2D capture and 3D direct rendering
+- Create example 3D application to demonstrate API
+- Document API for third-party developers
+- Consider backward compatibility with Phase 1 (2D capture)
+
+**Benefits:**
+
+- Lower latency for 3D apps (no X11 capture overhead)
+- Better performance (direct GPU rendering)
+- More immersive 3D experiences
+- Enables true 3D desktop applications
+- Allows mixed 2D/3D desktop environments
+
+**Note:** Phase 1 (2D apps via X11 capture) remains available for applications that don't need 3D rendering or prefer the simpler approach. Both modes can coexist on the same desktop.
